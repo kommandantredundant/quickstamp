@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#1a1a1f"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Timestamps"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <title>Timestamps</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #1a1a1f;
+      --surface:  #232329;
+      --border:   #2e2d35;
+      --border2:  #38374a;
+      --accent:   #cc785c;
+      --accent-d: #b8694f;
+      --accent-l: #d4845f;
+      --text:     #e8e6e3;
+      --text2:    #c4c2d8;
+      --text3:    #8a8898;
+      --text4:    #5a5868;
+      --tag-bg:   #2a2930;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', 'Courier New', monospace;
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-bottom: calc(120px + env(safe-area-inset-bottom));
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a3940; border-radius: 2px; }
+
+    /* ── Header ── */
+    #header {
+      width: 100%; max-width: 520px;
+      padding: 28px 20px 16px;
+      border-bottom: 1px solid #252429;
+      margin-bottom: 12px;
+    }
+    #header-row { display: flex; align-items: baseline; gap: 8px; }
+    #header-title { font-size: 18px; font-weight: 500; color: var(--text); letter-spacing: -0.02em; }
+    #entry-count { font-size: 12px; color: var(--text3); }
+    #live-clock { font-size: 11px; color: var(--text4); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+    #export-btn {
+      margin-left: auto;
+      background: none; border: 1px solid var(--border2);
+      border-radius: 8px; padding: 5px 10px;
+      color: var(--text3); font-family: inherit; font-size: 11px;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      transition: all 0.15s; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #export-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #export-btn:active { transform: scale(0.95); }
+    #export-btn.exported {
+      border-color: #4caf7d; color: #4caf7d;
+      animation: exported-flash 1.2s ease forwards;
+    }
+    @keyframes exported-flash {
+      0%   { border-color: #4caf7d; color: #4caf7d; }
+      80%  { border-color: #4caf7d; color: #4caf7d; }
+      100% { border-color: var(--border2); color: var(--text3); }
+    }
+
+    /* ── Filter bar ── */
+    #filter-bar {
+      width: 100%; max-width: 520px;
+      padding: 0 20px 12px;
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    #filter-bar.visible { display: flex; }
+
+    .filter-chip {
+      display: inline-flex; align-items: center;
+      padding: 4px 12px; border-radius: 20px; font-size: 11px;
+      border: 1px solid var(--border2);
+      background: var(--surface); color: var(--text2);
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .filter-chip:hover { border-color: rgba(204,120,92,0.55); color: var(--accent); }
+    .filter-chip.active { background: rgba(204,120,92,0.1); border-color: rgba(204,120,92,0.4); color: var(--accent); }
+
+    /* ── Entry list ── */
+    #entries {
+      width: 100%; max-width: 520px;
+      padding: 0 20px;
+      display: flex; flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ── Empty state ── */
+    #empty {
+      text-align: center; padding: 64px 0; color: var(--text4);
+      animation: fadeIn 0.35s ease 0.15s both;
+    }
+    #empty .icon { font-size: 30px; margin-bottom: 10px; }
+    #empty .label { font-size: 13px; }
+
+    /* ── Entry card ── */
+    .entry-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      position: relative;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      animation: slideIn 0.22s ease;
+    }
+    .entry-card:hover { border-color: #3a3848; }
+    .entry-card.active { border-color: rgba(204,120,92,0.35); cursor: default; }
+
+    .ts-row {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 0;
+    }
+    .ts-row.spaced { margin-bottom: 10px; }
+    .ts-time { font-size: 20px; font-weight: 500; color: var(--accent); letter-spacing: -0.03em; line-height: 1; }
+    .ts-date { font-size: 11px; color: var(--text3); }
+    .ts-ago  { font-size: 11px; color: var(--text4); margin-left: auto; padding-right: 22px; }
+
+    .delete-btn {
+      opacity: 0; background: none; border: none; cursor: pointer;
+      color: var(--text3); font-size: 13px; padding: 2px 5px;
+      border-radius: 4px; position: absolute; top: 12px; right: 12px;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .entry-card:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { color: #e05555; background: rgba(224,85,85,0.12); }
+
+    /* ── Tags row ── */
+    .tags-row {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      margin-bottom: 0;
+    }
+    .tags-row.spaced { margin-bottom: 10px; }
+
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--tag-bg); border: 1px solid var(--border2);
+      border-radius: 20px; padding: 3px 10px;
+      font-size: 11px; color: var(--text2);
+      cursor: default; transition: background 0.15s;
+      font-family: inherit;
+    }
+    .tag-chip:hover { background: #333244; }
+    .tag-chip .rm {
+      opacity: 0; cursor: pointer; border: none; background: none;
+      color: var(--accent); font-size: 11px; padding: 0 0 0 2px;
+      transition: opacity 0.15s; font-family: inherit;
+    }
+    .tag-chip:hover .rm { opacity: 1; }
+
+    /* ── Input area ── */
+    .input-area { display: flex; flex-direction: column; gap: 8px; }
+
+    .tag-input {
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 8px; color: var(--text);
+      font-family: inherit; font-size: 12px;
+      padding: 7px 10px; outline: none; width: 100%;
+      transition: border-color 0.2s;
+    }
+    .tag-input:focus { border-color: rgba(204,120,92,0.5); }
+    .tag-input::placeholder { color: var(--text4); }
+
+    .presets { display: flex; flex-wrap: wrap; gap: 5px; }
+    .preset-btn {
+      background: transparent; border: 1px dashed var(--border2);
+      border-radius: 20px; padding: 3px 10px;
+      font-size: 11px; color: var(--text3);
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .preset-btn:hover { border-color: rgba(204,120,92,0.5); color: var(--accent); background: rgba(204,120,92,0.06); }
+
+    .done-btn {
+      align-self: flex-end; background: none; border: none;
+      cursor: pointer; color: var(--text3); font-size: 11px;
+      padding: 2px 4px; font-family: inherit; transition: color 0.15s;
+    }
+    .done-btn:hover { color: var(--text2); }
+
+    /* ── FAB ── */
+    #fab-wrap {
+      position: fixed;
+      bottom: calc(28px + env(safe-area-inset-bottom));
+      left: 50%; transform: translateX(-50%);
+      z-index: 100;
+    }
+    #fab {
+      width: 72px; height: 72px;
+      border-radius: 16px; border: none;
+      background: var(--accent);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s ease, background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #fab:hover  { background: var(--accent-l); transform: scale(1.04); }
+    #fab:active { background: var(--accent-d); transform: scale(0.94); }
+    #fab.flash  { animation: btn-flash 0.45s ease; }
+    @keyframes btn-flash {
+      0%   { background: var(--accent); }
+      30%  { background: #e8957a; }
+      100% { background: var(--accent); }
+    }
+
+    /* ── Animations ── */
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div id="header-row">
+    <span id="header-title">timestamps</span>
+    <span id="entry-count" style="display:none"></span>
+    <button id="export-btn" title="Als CSV exportieren">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1v7M3 5.5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      CSV
+    </button>
+  </div>
+  <div id="live-clock"></div>
+</div>
+
+<!-- Filter bar -->
+<div id="filter-bar"></div>
+
+<!-- Entries -->
+<div id="entries">
+  <div id="empty">
+    <div class="icon">⏱</div>
+    <div class="label">drück den knopf, um loszulegen</div>
+  </div>
+</div>
+
+<!-- FAB -->
+<div id="fab-wrap">
+  <button id="fab" title="Zeitstempel speichern">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <line x1="14" y1="5" x2="14" y2="23" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="5"  y1="14" x2="23" y2="14" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const PRESET_TAGS = ["wichtig","arbeit","idee","todo","follow-up","meeting","persönlich"];
+let entries    = JSON.parse(localStorage.getItem('ts-entries') || '[]')
+                   .map(e => ({ ...e, date: new Date(e.date) }));
+let activeId   = null;
+let activeFilter = null;
+
+// ─── Persist ──────────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('ts-entries', JSON.stringify(entries));
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(d) {
+  return d.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+function fmtDate(d) {
+  return d.toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+}
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60)   return `vor ${s}s`;
+  if (s < 3600) return `vor ${Math.floor(s/60)}min`;
+  if (s < 86400)return `vor ${Math.floor(s/3600)}h`;
+  return `vor ${Math.floor(s/86400)}d`;
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  // Count
+  const countEl = document.getElementById('entry-count');
+  if (entries.length > 0) {
+    countEl.style.display = '';
+    countEl.textContent = `${entries.length} ${entries.length === 1 ? 'eintrag' : 'einträge'}`;
+  } else {
+    countEl.style.display = 'none';
+  }
+
+  // All tags
+  const allTags = [...new Set(entries.flatMap(e => e.tags))];
+
+  // Filter bar
+  const fb = document.getElementById('filter-bar');
+  if (allTags.length > 0) {
+    fb.classList.add('visible');
+    fb.innerHTML = '';
+    const makeChip = (label, val) => {
+      const b = document.createElement('button');
+      b.className = 'filter-chip' + (activeFilter === val ? ' active' : '');
+      b.textContent = label;
+      b.onclick = () => { activeFilter = (activeFilter === val ? null : val); render(); };
+      return b;
+    };
+    fb.appendChild(makeChip('alle', null));
+    allTags.forEach(t => fb.appendChild(makeChip('#' + t, t)));
+  } else {
+    fb.classList.remove('visible');
+    fb.innerHTML = '';
+    activeFilter = null;
+  }
+
+  // Filtered entries
+  const filtered = activeFilter
+    ? entries.filter(e => e.tags.includes(activeFilter))
+    : entries;
+
+  const container = document.getElementById('entries');
+  container.innerHTML = '';
+
+  if (filtered.length === 0 && entries.length === 0) {
+    const em = document.createElement('div');
+    em.id = 'empty';
+    em.innerHTML = '<div class="icon">⏱</div><div class="label">drück den knopf, um loszulegen</div>';
+    container.appendChild(em);
+    return;
+  }
+  if (filtered.length === 0) {
+    const em = document.createElement('div');
+    em.style.cssText = 'text-align:center;padding:40px 0;color:var(--text4);font-size:13px';
+    em.textContent = `keine einträge für #${activeFilter}`;
+    container.appendChild(em);
+    return;
+  }
+
+  filtered.forEach(entry => {
+    const isActive = entry.id === activeId;
+    const hasGap   = entry.tags.length > 0 || isActive;
+
+    const card = document.createElement('div');
+    card.className = 'entry-card' + (isActive ? ' active' : '');
+    if (!isActive) card.onclick = () => { activeId = entry.id; render(); };
+
+    // Delete btn
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.textContent = '✕';
+    del.onclick = e => { e.stopPropagation(); entries = entries.filter(x => x.id !== entry.id); if (activeId === entry.id) activeId = null; save(); render(); };
+    card.appendChild(del);
+
+    // Timestamp row
+    const tsRow = document.createElement('div');
+    tsRow.className = 'ts-row' + (hasGap ? ' spaced' : '');
+    tsRow.innerHTML = `
+      <span class="ts-time">${fmt(entry.date)}</span>
+      <span class="ts-date">${fmtDate(entry.date)}</span>
+      <span class="ts-ago">${timeAgo(entry.date)}</span>
+    `;
+    card.appendChild(tsRow);
+
+    // Tags
+    if (entry.tags.length > 0) {
+      const tagsRow = document.createElement('div');
+      tagsRow.className = 'tags-row' + (isActive ? ' spaced' : '');
+      entry.tags.forEach(tag => {
+        const chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        chip.innerHTML = `#${tag}`;
+        const rm = document.createElement('button');
+        rm.className = 'rm';
+        rm.textContent = '✕';
+        rm.onclick = e => {
+          e.stopPropagation();
+          const ent = entries.find(x => x.id === entry.id);
+          if (ent) { ent.tags = ent.tags.filter(t => t !== tag); save(); render(); }
+        };
+        chip.appendChild(rm);
+        tagsRow.appendChild(chip);
+      });
+      card.appendChild(tagsRow);
+    }
+
+    // Input area (active only)
+    if (isActive) {
+      const area = document.createElement('div');
+      area.className = 'input-area';
+      area.onclick = e => e.stopPropagation();
+
+      const input = document.createElement('input');
+      input.className = 'tag-input';
+      input.placeholder = 'tag eingeben + enter';
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+
+      const addTag = () => {
+        const t = input.value.trim().toLowerCase();
+        if (!t) return;
+        const ent = entries.find(x => x.id === entry.id);
+        if (ent && !ent.tags.includes(t)) { ent.tags.push(t); save(); }
+        input.value = '';
+        render();
+        // re-focus
+        setTimeout(() => {
+          const el = document.querySelector('.tag-input');
+          if (el) el.focus();
+        }, 20);
+      };
+
+      input.onkeydown = e => {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+        if (e.key === 'Escape') { activeId = null; render(); }
+      };
+
+      area.appendChild(input);
+
+      // Presets
+      const presets = document.createElement('div');
+      presets.className = 'presets';
+      const existing = entry.tags;
+      PRESET_TAGS.filter(t => !existing.includes(t)).slice(0, 6).forEach(pt => {
+        const b = document.createElement('button');
+        b.className = 'preset-btn';
+        b.textContent = '+' + pt;
+        b.onclick = () => {
+          const ent = entries.find(x => x.id === entry.id);
+          if (ent && !ent.tags.includes(pt)) { ent.tags.push(pt); save(); render(); }
+        };
+        presets.appendChild(b);
+      });
+      area.appendChild(presets);
+
+      const done = document.createElement('button');
+      done.className = 'done-btn';
+      done.textContent = 'fertig ↵';
+      done.onclick = () => { activeId = null; render(); };
+      area.appendChild(done);
+
+      card.appendChild(area);
+
+      // Focus after render
+      setTimeout(() => input.focus(), 30);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+// ─── Live clock ───────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('live-clock').textContent =
+    now.toLocaleTimeString('de-DE') + ' · ' +
+    now.toLocaleDateString('de-DE', { weekday:'long', day:'numeric', month:'long' });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ─── Live timeAgo refresh ─────────────────────────────────────────────────────
+setInterval(() => {
+  document.querySelectorAll('.ts-ago').forEach((el, i) => {
+    const filtered = activeFilter ? entries.filter(e => e.tags.includes(activeFilter)) : entries;
+    if (filtered[i]) el.textContent = timeAgo(filtered[i].date);
+  });
+}, 15000);
+
+// ─── CSV Export ───────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (entries.length === 0) return;
+  const rows = [['id','datum','uhrzeit','iso_timestamp','tags']];
+  entries.forEach(e => {
+    rows.push([
+      e.id,
+      e.date.toLocaleDateString('de-DE'),
+      e.date.toLocaleTimeString('de-DE'),
+      e.date.toISOString(),
+      e.tags.join('; ')
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const ts   = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `timestamps_${ts}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  const btn = document.getElementById('export-btn');
+  btn.classList.remove('exported');
+  void btn.offsetWidth;
+  btn.classList.add('exported');
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6.5l2.5 2.5 5.5-5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> gespeichert`;
+  setTimeout(() => {
+    btn.classList.remove('exported');
+    btn.innerHTML = \`<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> CSV\`;
+  }, 1800);
+}
+
+document.getElementById('export-btn').addEventListener('click', exportCSV);
+
+// ─── FAB ──────────────────────────────────────────────────────────────────────
+document.getElementById('fab').addEventListener('click', () => {
+  const fab = document.getElementById('fab');
+  fab.classList.remove('flash');
+  void fab.offsetWidth; // reflow
+  fab.classList.add('flash');
+  setTimeout(() => fab.classList.remove('flash'), 500);
+
+  const newEntry = { id: Date.now(), date: new Date(), tags: [] };
+  entries.unshift(newEntry);
+  activeId = newEntry.id;
+  save();
+  render();
+});
+
+// ─── Initial render ───────────────────────────────────────────────────────────
+render();
+
+// ─── Service Worker ───────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(console.warn);
+}
+</script>
+</body>
+</html>
